@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Компьютеры в сети</title>
+  <link href="/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    .disk-info, .network-info {
+      margin-bottom: 5px;
+    }
+    .serial-number {
+      font-family: monospace;
+      color: #6c757d;
+    }
+    .logout-btn {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+    }
+    .location-edit {
+      cursor: pointer;
+    }
+    .location-edit:hover {
+      background-color: #f8f9fa;
+    }
+    .edit-form {
+      display: flex;
+      gap: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container-fluid mt-3">
+    <!-- Кнопка выхода -->
+    <a href="/logout" class="btn btn-danger logout-btn">Выход</a>
+    
+    <h2>Компьютеры (<%= computers.length %>)</h2>
+    
+    <!-- Поиск -->
+    <form class="mb-4">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <div class="input-group">
+            <input type="text" name="pcName" class="form-control" 
+                   placeholder="Имя компьютера" value="<%= pcNameQuery %>">
+            <button class="btn btn-primary">Поиск</button>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="input-group">
+            <input type="text" name="ip" class="form-control" 
+                   placeholder="IP-адрес" value="<%= searchQuery %>">
+            <button class="btn btn-success">Поиск по IP</button>
+          </div>
+        </div>
+      </div>
+    </form>
+
+    <!-- Таблица -->
+    <div class="table-responsive">
+      <table class="table table-striped table-hover">
+        <thead class="table-dark">
+          <tr>
+            <th>ID</th>
+            <th>Имя ПК</th>
+            <th>CPU</th>
+            <th>RAM</th>
+            <th>OS</th>
+            <th>Диски</th>
+            <th>Сеть</th>
+            <th>Дата обновления</th>
+            <th>Место установки</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% computers.forEach(pc => { %>
+            <tr>
+              <td><%= pc.id %></td>
+              <td><%= pc.pc_name %></td>
+              <td><%= pc.cpu %></td>
+              <td><%= pc.ram %></td>
+              <td><%= pc.os %></td>
+              <td>
+                <% pc.disks.forEach(disk => { %>
+                  <div class="disk-info">
+                    <strong><%= disk.model %></strong><br>
+                    <%= disk.size %> | 
+                    <span class="serial-number"><%= disk.serial %></span> |
+                    Тип: <%= disk.type %>
+                  </div>
+                <% }) %>
+              </td>
+              <td>
+                <% pc.network.forEach(net => { %>
+                  <div class="network-info">
+                    <strong><%= net.description %></strong><br>
+                    IP: <%= net.ip %><br>
+                    MAC: <%= net.mac %>
+                  </div>
+                <% }) %>
+              </td>
+              <td><%= new Date(pc.timestamp).toLocaleString() %></td>
+              <td class="location-cell" data-pc-id="<%= pc.id %>">
+                <div class="location-view location-edit">
+                  <%= pc.location || 'Не указано' %>
+                </div>
+                <div class="location-edit-form" style="display: none;">
+                  <div class="edit-form">
+                    <input type="text" class="form-control form-control-sm location-input" 
+                           value="<%= pc.location || '' %>">
+                    <button class="btn btn-sm btn-success save-location">✓</button>
+                    <button class="btn btn-sm btn-secondary cancel-edit">✕</button>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Обработчик клика по месту установки
+      document.querySelectorAll('.location-edit').forEach(element => {
+        element.addEventListener('click', function() {
+          const cell = this.closest('.location-cell');
+          cell.querySelector('.location-view').style.display = 'none';
+          cell.querySelector('.location-edit-form').style.display = 'block';
+          cell.querySelector('.location-input').focus();
+        });
+      });
+
+      // Обработчик сохранения
+      document.querySelectorAll('.save-location').forEach(button => {
+        button.addEventListener('click', async function() {
+          const cell = this.closest('.location-cell');
+          const pcId = cell.dataset.pcId;
+          const newLocation = cell.querySelector('.location-input').value;
+          
+          try {
+            const response = await fetch('/api/update-location', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                pcId: pcId,
+                location: newLocation
+              })
+            });
+
+            if (response.ok) {
+              const result = await response.json();
+              cell.querySelector('.location-view').textContent = newLocation || 'Не указано';
+              cell.querySelector('.location-view').style.display = 'block';
+              cell.querySelector('.location-edit-form').style.display = 'none';
+            } else {
+              throw new Error('Ошибка сохранения');
+            }
+          } catch (error) {
+            console.error('Ошибка:', error);
+            alert('Не удалось сохранить изменения');
+          }
+        });
+      });
+
+      // Обработчик отмены редактирования
+      document.querySelectorAll('.cancel-edit').forEach(button => {
+        button.addEventListener('click', function() {
+          const cell = this.closest('.location-cell');
+          cell.querySelector('.location-view').style.display = 'block';
+          cell.querySelector('.location-edit-form').style.display = 'none';
+        });
+      });
+
+      // Сохранение при нажатии Enter
+      document.querySelectorAll('.location-input').forEach(input => {
+        input.addEventListener('keypress', function(e) {
+          if (e.key === 'Enter') {
+            this.closest('.location-cell').querySelector('.save-location').click();
+          }
+        });
+      });
+    });
+  </script>
+</body>
+</html>

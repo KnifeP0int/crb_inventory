@@ -1,0 +1,44 @@
+Как развернуть?
+Клиент (PowerShell/Bash)
+
+Запустите скрипт вручную или через Планировщик задач (Windows) / Cron (Linux).
+
+Для Windows:
+powershell
+.\collect_pc_windows.ps1
+
+Если Windows 11 то выполнить сперва
+Set-ExecutionPolicy unrestricted
+Выбираем А 
+Потом Запустить Однажды R
+Set-ExecutionPolicy restricted
+
+
+Для Linux:
+sudo apt-get update
+sudo apt-get install -y jq curl
+sudo chmod +x collect_pc_data.sh
+sudo sh ./collect_pc_data.sh
+
+////********Пока не надо********************************************////////////////////////////
+Генерация SSL-сертификата (для теста)
+bash
+
+openssl req -x509 -newkey rsa:4096 -keyout selfsigned.key -out selfsigned.crt -days 365 -nodes
+
+Положите полученные selfsigned.key и selfsigned.crt в папку с сервером.
+На продакшене используйте сертификаты от Lets Encrypt!
+////********Пока не надо********************************************/////////////////////////////
+
+Сервер
+
+
+Установите Node.js + MySQL.
+
+Добавить пользователю все привелегии
+GRANT ALL PRIVILEGES ON * . * TO 'user'@'localhost';
+
+Запустите сервер:
+
+bash
+node server.js
