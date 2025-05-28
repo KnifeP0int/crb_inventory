@@ -1,10 +1,12 @@
 const mysql = require('mysql2/promise');
+const env=require('dotenv').config();
+
 
 const dbConfig = {
     host: process.env.DB_HOST,
-    user: 'prog',
-    password: 'V32321111Vv',
-    database: 'pc_inventory',
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
     waitForConnections: true,
   connectionLimit: 10,       // максимальное количество соединений в пуле
   queueLimit: 0,             // неограниченная очередь запросов

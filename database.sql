@@ -11,5 +11,5 @@ CREATE TABLE computers (
   disks JSON,  -- MySQL 5.7+ поддерживает JSON
   network JSON,
   timestamp DATETIME,
-  place_install VARCHAR(255)
+  location VARCHAR(255)
 );
