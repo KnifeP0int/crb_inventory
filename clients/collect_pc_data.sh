@@ -36,7 +36,7 @@ JSON_DATA=$(jq -n \
   --arg os "$OS_INFO" \
   --argjson disks "$(echo "$DISKS" | jq -s '.')" \
   --argjson network "$(echo "$NETWORK" | jq -s '.')" \
-  --arg timestamp "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+  --arg timestamp "$(date -u +"%Y-%m-%d %H:%M:%S")" \
   '{
     pcName: $pcName,
     cpu: $cpu,
