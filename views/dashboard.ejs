@@ -17,10 +17,10 @@
       top: 20px;
       right: 20px;
     }
-    .location-edit {
+    .place_install-edit {
       cursor: pointer;
     }
-    .location-edit:hover {
+    .place_install-edit:hover {
       background-color: #f8f9fa;
     }
     .edit-form {
@@ -32,47 +32,33 @@
 <body>
   <div class="container-fluid mt-3">
     <!-- Кнопка выхода -->
-    <a href="/logout" class="btn btn-danger logout-btn">Выход</a>
-    
+    <a href="/logout" class="btn btn-danger logout-btn">Выход</a>    
     <h2>Компьютеры (<%= computers.length %>)</h2>
-    
-    <!-- Поиск -->
-    <form class="mb-4">
-      <div class="row g-3">
-        <div class="col-md-6">
-          <div class="input-group">
-            <input type="text" name="pcName" class="form-control" 
-                   placeholder="Имя компьютера" value="<%= pcNameQuery %>">
-            <button class="btn btn-primary">Поиск</button>
-          </div>
-        </div>
-        <div class="col-md-6">
-          <div class="input-group">
-            <input type="text" name="ip" class="form-control" 
-                   placeholder="IP-адрес" value="<%= searchQuery %>">
-            <button class="btn btn-success">Поиск по IP</button>
-          </div>
-        </div>
-      </div>
-    </form>
+    <div class="row g-3">
+      <form method ="GET" action="/dashboard" class="search-form" style="display: flex; gap: 8px; margin-bottom: 16px;">
+        <input type="text" id="search-pcname" name="pcName" class="form-control" placeholder="Имя компьютера" value="<%= pcNameQuery %>" autocomplete="off">
+        <input type="text" id="search-ip" name="ip" class="form-control" placeholder="IP-адрес" value="<%= searchQuery %>" autocomplete="off">
+        <input type="text" id="search-place_install" name="place_install" class="form-control" placeholder="Место установки" value="<%= place_installQuery %>" autocomplete="off">        
+      </form>
+    </div>
 
     <!-- Таблица -->
     <div class="table-responsive">
       <table class="table table-striped table-hover">
         <thead class="table-dark">
           <tr>
-            <th>ID</th>
-            <th>Имя ПК</th>
+            <th><a href="#" class="sortable" data-sort="id">ID<span class="sort-arrow" id="sort-arrow-id"></span></span></a></th>
+            <th><a href="#" class="sortable" data-sort="pc_name">Имя ПК<span class="sort-arrow" id="sort-arrow-pc_name"></span></span></a></th>
             <th>CPU</th>
             <th>RAM</th>
             <th>OS</th>
             <th>Диски</th>
             <th>Сеть</th>
-            <th>Дата обновления</th>
-            <th>Место установки</th>
+            <th><a href="#" class="sortable" data-sort="timestamp">Дата/время<span class="sort-arrow" id="sort-arrow-timestamp"></span></span></a></th>
+            <th><a href="#" class="sortable" data-sort="place_install">Место установки<span class="sort-arrow" id="sort-arrow-place_install"></span></span></a></th>
           </tr>
         </thead>
-        <tbody>
+        <tbody id="pc-table-body">
           <% computers.forEach(pc => { %>
             <tr>
               <td><%= pc.id %></td>
@@ -100,15 +86,15 @@
                 <% }) %>
               </td>
               <td><%= new Date(pc.timestamp).toLocaleString() %></td>
-              <td class="location-cell" data-pc-id="<%= pc.id %>">
-                <div class="location-view location-edit">
-                  <%= pc.location || 'Не указано' %>
+              <td class="place_install-cell" data-pc-id="<%= pc.id %>">
+                <div class="place_install-view place_install-edit">
+                  <%= pc.place_install || 'Не указано' %>
                 </div>
-                <div class="location-edit-form" style="display: none;">
+                <div class="place_install-edit-form" style="display: none;">
                   <div class="edit-form">
-                    <input type="text" class="form-control form-control-sm location-input" 
-                           value="<%= pc.location || '' %>">
-                    <button class="btn btn-sm btn-success save-location">✓</button>
+                    <input type="text" class="form-control form-control-sm place_install-input" 
+                           value="<%= pc.place_install || '' %>">
+                    <button class="btn btn-sm btn-success save-place_install">✓</button>
                     <button class="btn btn-sm btn-secondary cancel-edit">✕</button>
                   </div>
                 </div>
@@ -121,70 +107,201 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  
   <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      // Обработчик клика по месту установки
-      document.querySelectorAll('.location-edit').forEach(element => {
-        element.addEventListener('click', function() {
-          const cell = this.closest('.location-cell');
-          cell.querySelector('.location-view').style.display = 'none';
-          cell.querySelector('.location-edit-form').style.display = 'block';
-          cell.querySelector('.location-input').focus();
-        });
-      });
+    const pcTableBody = document.getElementById('pc-table-body');
+    const pcNameInput = document.getElementById('search-pcname');
+    const ipInput = document.getElementById('search-ip');
+    const place_installInput = document.getElementById('search-place_install');
 
-      // Обработчик сохранения
-      document.querySelectorAll('.save-location').forEach(button => {
-        button.addEventListener('click', async function() {
-          const cell = this.closest('.location-cell');
-          const pcId = cell.dataset.pcId;
-          const newLocation = cell.querySelector('.location-input').value;
-          
-          try {
-            const response = await fetch('/api/update-location', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                pcId: pcId,
-                location: newLocation
-              })
-            });
+    let currentSort = '<%= currentSort || "timestamp" %>';
+    let currentOrder = '<%= currentOrder || "desc" %>';
 
-            if (response.ok) {
-              const result = await response.json();
-              cell.querySelector('.location-view').textContent = newLocation || 'Не указано';
-              cell.querySelector('.location-view').style.display = 'block';
-              cell.querySelector('.location-edit-form').style.display = 'none';
-            } else {
-              throw new Error('Ошибка сохранения');
-            }
-          } catch (error) {
-            console.error('Ошибка:', error);
-            alert('Не удалось сохранить изменения');
-          }
-        });
-      });
-
-      // Обработчик отмены редактирования
-      document.querySelectorAll('.cancel-edit').forEach(button => {
-        button.addEventListener('click', function() {
-          const cell = this.closest('.location-cell');
-          cell.querySelector('.location-view').style.display = 'block';
-          cell.querySelector('.location-edit-form').style.display = 'none';
-        });
-      });
-
-      // Сохранение при нажатии Enter
-      document.querySelectorAll('.location-input').forEach(input => {
-        input.addEventListener('keypress', function(e) {
-          if (e.key === 'Enter') {
-            this.closest('.location-cell').querySelector('.save-location').click();
-          }
-        });
-      });
+function updateSortArrows() {
+    ['id','pc_name', 'timestamp' ,'place_install' ].forEach(field => {
+        const arrow = document.getElementById('sort-arrow-' + field);
+        if (!arrow) return;
+        if (currentSort === field) {
+            arrow.innerText = currentOrder === 'asc' ? ' ▲' : ' ▼';
+        } else {
+            arrow.innerText = '';
+        }
     });
+}
+updateSortArrows();
+
+// debounce для поиска
+let searchTimeout;
+[ pcNameInput, ipInput, place_installInput].forEach(input => {
+    input.addEventListener('input', () => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => fetchAndRender(), 300);
+    });
+});
+
+document.querySelectorAll('.sortable').forEach(link => {
+    link.addEventListener('click', function(e) {
+        e.preventDefault();
+        const sortField = this.getAttribute('data-sort');
+        // Если клик по текущему полю — меняем порядок
+        if (currentSort === sortField) {
+            currentOrder = currentOrder === 'asc' ? 'desc' : 'asc';
+        } else {
+            currentSort = sortField;
+            currentOrder = 'asc';
+        }
+        fetchAndRender();
+    });
+});
+
+async function fetchAndRender() {
+    const pcName = pcNameInput.value;
+    const ip = ipInput.value;
+    const place_install = place_installInput.value;
+
+    const params = new URLSearchParams();
+    if (pcName) params.append('pcName', pcName);
+    if (ip) params.append('ip', ip);
+    if (place_install) params.append('place_install', place_install);
+    params.append('sort', currentSort);
+    params.append('order', currentOrder);
+
+    try {
+        const res = await fetch(`/api/computers?${params.toString()}`);
+        const data = await res.json();
+        renderTable(data);
+        updateSortArrows();
+    } catch (e) {
+        pcTableBody.innerHTML = '<tr><td colspan="8" style="text-align:center;">Ошибка загрузки данных</td></tr>';
+    }
+}
+
+function renderTable(data) {
+    if (!data || !data.length) {
+        pcTableBody.innerHTML = '<tr><td colspan="8" style="text-align:center;">Нет данных</td></tr>';
+        return;
+    }
+    pcTableBody.innerHTML = data.map(pc => `
+        <tr>
+          <td>${pc.id}</td>
+          <td>${pc.pc_name}</td>
+          <td>${pc.cpu || ''}</td>
+          <td>${pc.ram || ''}</td>
+          <td>${pc.os || ''}</td>
+          <td>
+            ${renderDisks(pc.disks)}
+          </td>
+          <td>
+            ${renderNetwork(pc.network)}
+          </td>
+          <td>${new Date(pc.timestamp).toLocaleString()}</td>
+          <td class="place_install-cell" data-pc-id="${pc.id}">
+            <div class="place_install-view place_install-edit">
+              ${pc.place_install || 'Не указано'}
+            </div>
+            <div class="place_install-edit-form" style="display: none;">
+              <div class="edit-form">
+                <input type="text" class="form-control form-control-sm place_install-input" 
+                      value="${pc.place_install || ''}">
+                <button class="btn btn-sm btn-success save-place_install">✓</button>
+                <button class="btn btn-sm btn-secondary cancel-edit">✕</button>
+              </div>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+}
+// Делегируем события для работы с местом установки
+pcTableBody.addEventListener('click', async function(e) {
+  // Открыть форму редактирования по клику на place_install-edit
+  if (e.target.classList.contains('place_install-edit')) {
+    const cell = e.target.closest('.place_install-cell');
+    cell.querySelector('.place_install-view').style.display = 'none';
+    cell.querySelector('.place_install-edit-form').style.display = 'block';
+    cell.querySelector('.place_install-input').focus();
+  }
+
+  // Сохранить новое место установки
+  if (e.target.classList.contains('save-place_install')) {
+    const cell = e.target.closest('.place_install-cell');
+    const pcId = cell.dataset.pcId;
+    const newplace_install = cell.querySelector('.place_install-input').value;
+    try {
+      const response = await fetch('/api/update-place_install', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pcId, place_install: newplace_install })
+      });
+      if (response.ok) {
+        cell.querySelector('.place_install-view').textContent = newplace_install || 'Не указано';
+        cell.querySelector('.place_install-view').style.display = 'block';
+        cell.querySelector('.place_install-edit-form').style.display = 'none';
+      } else {
+        throw new Error('Ошибка сохранения');
+      }
+    } catch (error) {
+      console.error('Ошибка:', error);
+      alert('Не удалось сохранить изменения');
+    }
+  }
+
+  // Отменить редактирование
+  if (e.target.classList.contains('cancel-edit')) {
+    const cell = e.target.closest('.place_install-cell');
+    cell.querySelector('.place_install-view').style.display = 'block';
+    cell.querySelector('.place_install-edit-form').style.display = 'none';
+  }
+});
+
+// Отдельно делегируем обработку Enter на редактируемых инпутах
+pcTableBody.addEventListener('keypress', function(e) {
+  if (e.target.classList.contains('place_install-input') && e.key === 'Enter') {
+    e.preventDefault();
+    e.target.closest('.place_install-cell').querySelector('.save-place_install').click();
+  }
+});
+// Рендер дисков
+    function renderDisks(disks) {
+      if (!disks || disks.length === 0) {
+        return 'Нет данных';
+      }
+      
+      return disks.map(disk => `
+        <div class="disk-info">
+          ${disk.model ? `<strong>${disk.model}</strong><br>` : ''}
+          ${disk.size || ''} | 
+          <span class="serial-number">${disk.serial || ''}</span> |
+          Тип: ${disk.type || ''}
+        </div>
+      `).join('');
+    }
+
+    // Рендер сети
+    function renderNetwork(network) {
+      if (!network || network.length === 0) {
+        return 'Нет данных';
+      }
+      
+      return network.map(net => `
+        <div class="network-info">
+          ${net.description ? `<strong>${net.description}</strong><br>` : ''}
+          IP: ${net.ip || ''}<br>
+          MAC: ${net.mac || ''}
+        </div>
+      `).join('');
+    }
+
+// Парсинг строковых полей JSON
+function parseJson(val) {
+    if (!val) return [];
+    if (typeof val === 'string') {
+        try { return JSON.parse(val); } catch { return []; }
+    }
+    return val;
+}
+
+// Можно раскомментировать, если нужен первый автоматический fetch
+// fetchAndRender();
   </script>
 </body>
 </html>

@@ -3,9 +3,8 @@ const session = require('express-session');
 const MySQLStore = require('express-mysql-session')(session);
 const path = require('path');
 const { pool } = require('./db-config');
-
-
 const app = express();
+require('dotenv').config();
 
 // =============================================
 // 1. Настройка шаблонизатора EJS
@@ -34,7 +33,7 @@ const sessionStore = new MySQLStore({
 }, pool);
 
 app.use(session({
-  secret: 'dc1968f6a7672164e46c819e06e77e8f09daf0f56c29b86fb30b4490f043cb60',
+  secret: process.env.SESSION_SECRET,
   store: sessionStore,
   resave: false,
   saveUninitialized: false,
@@ -56,7 +55,7 @@ app.get('/admin', (req, res) => {
 app.post('/admin/login', async (req, res) => {
   const { username, password } = req.body;
   
-  if (username === 'admin' && password === 'pass123') {
+  if (username === process.env.LOGIN && password === process.env.PASSWORD) {
     req.session.isAdmin = true;
     return res.redirect('/dashboard');
   }
@@ -76,23 +75,43 @@ app.get('/dashboard', async (req, res) => {
     return res.redirect('/admin');
   }
 
-  const { pcName, ip } = req.query;
+  const { pcName, ip, place_install, sort, order } = req.query;
   let query = 'SELECT * FROM computers';
   let params = [];
+  let where = [];
 
   if (ip) {
-    query += ' WHERE JSON_CONTAINS(network, JSON_OBJECT("ip", ?))';
+    where.push('JSON_CONTAINS(network, JSON_OBJECT("ip", ?))');
     params.push(ip);
-  } else if (pcName) {
-    query += ' WHERE pc_name LIKE ?';
+  }
+  if (pcName) {
+    where.push('pc_name LIKE ?');
     params.push(`%${pcName}%`);
   }
+  if (place_install){
+    where.push('place_install LIKE ?');
+    params.push(`%${place_install}%`);
+  }
+  if (where.length){
+    query += ' WHERE ' + where.join(' AND ');
+  }
 
-  query += ' ORDER BY timestamp DESC LIMIT 100';
+  const allowedSort = ['id', 'pc_name', 'timestamp', 'place_install'];
+  let orderBy = 'timestamp DESC';
+  if (sort && allowedSort.includes(sort)){
+    const sortOrder = order === 'asc' ? 'ASC' : 'DESC';
+    orderBy =`${sort} ${sortOrder}`
+  }
+  query += ` ORDER BY ${orderBy} LIMIT 1000`;
 
   try {
     const [computers] = await pool.query(query, params);
-    
+    const baseQueryParams = {};
+    if (pcName) baseQueryParams.pcName = pcName;
+    if (ip) baseQueryParams.ip = ip;
+    if (place_install) baseQueryParams.place_install = place_install;
+    const baseQueryString = new URLSearchParams(baseQueryParams).toString();
+
     res.render('dashboard', { 
       computers: computers.map(pc => {
         // Функция для безопасного парсинга JSON
@@ -130,11 +149,15 @@ app.get('/dashboard', async (req, res) => {
             description: net.description || net.ifname || net.Description || 'Не указано'
           })),
           timestamp: pc.timestamp,
-          location: pc.location
+          place_install: pc.place_install
         };
       }),
       pcNameQuery: pcName || '',
-      searchQuery: ip || ''
+      place_installQuery: place_install || '',
+      searchQuery: ip || '',
+      baseQueryString,
+      currentSort: sort,
+      currentOrder: order
     });
   } catch (error) {
     console.error('Ошибка загрузки данных:', error);
@@ -145,6 +168,7 @@ app.get('/dashboard', async (req, res) => {
     });
   }
 });
+
 
 // Проверка подключения к БД
 (async () => {
@@ -172,7 +196,7 @@ app.post('/api/pc-data', async (req, res) => {
       'SELECT id FROM computers WHERE pc_name = ? LIMIT 1',
       [pcName]
     );
-
+    
     let result;
     if (existingRows.length > 0) {
       // Если запись существует - обновляем
@@ -229,13 +253,13 @@ app.post('/api/pc-data', async (req, res) => {
   }
 });
 
-// Обновление location
-app.post('/api/update-location', async (req, res) => {
+// Обновление place_install
+app.post('/api/update-place_install', async (req, res) => {
   let result;
   try {
     const { pcId, location } = req.body;
     
-    //console.log(req.body);
+    console.log(req.body);
 
     // Обновление в базе данных
 
@@ -249,23 +273,46 @@ app.post('/api/update-location', async (req, res) => {
         ]
       );
     res.json({ success: true });
+    console.log('UPDATE RESULT:', result)
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// API для получения списка компьютеров
 app.get('/api/computers', async (req, res) => {
+  const { pcName, ip, place_install, sort, order } = req.query;
+  let query = 'SELECT * FROM computers';
+  let params = [];
+  let where = [];
+
+  if (ip) {
+    where.push('JSON_CONTAINS(network, JSON_OBJECT("ip", ?))');
+    params.push(ip);
+  }
+  if (pcName) {
+    where.push('pc_name LIKE ?');
+    params.push(`%${pcName}%`);
+  }
+  if (place_install){
+    where.push('place_install LIKE ?');
+    params.push(`%${place_install}%`);
+  }
+  if (where.length){
+    query += ' WHERE ' + where.join(' AND ');
+  }
+  const validSortFields = ['id', 'pc_name', 'timestamp', 'place_install'];
+  const SortField = validSortFields.includes(sort) ? sort : 'timestamp'
+  const sortOrder = order === 'asc' ? 'ASC' : 'DESC';
+  query += ` ORDER BY ${SortField} ${sortOrder} LIMIT 1000`;
+
   try {
-    const [rows] = await pool.query('SELECT * FROM computers ORDER BY timestamp DESC');
-    res.status(200).json(rows);
-  } catch (error) {
-    console.error('❌ Ошибка получения данных:', error);
-    res.status(500).json({ error: 'Ошибка сервера' });
+    const [computers] = await pool.query(query, params);
+    res.json(computers);
+  } catch (error){
+    res.status(500).json({error:'DB error'});
   }
 });
-
 // API для получения данных конкретного компьютера
 app.get('/api/computers/:id', async (req, res) => {
   try {
@@ -280,14 +327,6 @@ app.get('/api/computers/:id', async (req, res) => {
   }
 });
 
-
-// Главная страница (логин)
-app.get('/admin', (req, res) => {
-  if (req.session.isAdmin) {
-    return res.redirect('/dashboard');
-  }
-  res.render('login', { error: null });
-});
 
 // Запуск сервера
 const PORT = 3000;
